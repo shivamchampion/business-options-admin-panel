@@ -41,18 +41,28 @@ export function AuthProvider({ children }) {
 
   // Listen for auth state changes
   useEffect(() => {
+    console.log("Setting up auth state listener");
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state changed, user:", user ? `${user.email} (${user.uid})` : "No user");
       setCurrentUser(user);
       
       if (user) {
         try {
           // Get additional user data from Firestore
+          console.log(`Fetching Firestore user document for UID: ${user.uid}`);
           const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
           const userDocSnap = await getDoc(userDocRef);
           
+          console.log("Firestore document exists:", userDocSnap.exists());
+          
           if (userDocSnap.exists()) {
-            setUserDetails(userDocSnap.data());
+            const userData = userDocSnap.data();
+            console.log("Firestore user data:", userData);
+            console.log(`User role: ${userData.role}, Admin role constant: ${USER_ROLES.ADMIN}`);
+            console.log(`Is admin check: ${userData.role === USER_ROLES.ADMIN}`);
+            setUserDetails(userData);
           } else {
+            console.log("User document doesn't exist in Firestore, creating new document");
             // Create a basic user document if it doesn't exist
             // This can happen if user was created through Auth but Firestore doc wasn't created
             const userDoc = {
@@ -71,19 +81,27 @@ export function AuthProvider({ children }) {
               isDeleted: false
             };
             
+            console.log("New user document to create:", userDoc);
             await setDoc(userDocRef, userDoc);
             setUserDetails(userDoc);
           }
           
           // Update last login timestamp
-          await updateDoc(userDocRef, {
-            lastLogin: serverTimestamp()
-          });
+          console.log("Updating last login timestamp");
+          try {
+            await updateDoc(userDocRef, {
+              lastLogin: serverTimestamp()
+            });
+            console.log("Last login timestamp updated successfully");
+          } catch (updateError) {
+            console.error("Error updating last login:", updateError);
+          }
         } catch (err) {
           console.error("Error fetching user details:", err);
           setError(err.message);
         }
       } else {
+        console.log("No user signed in, clearing userDetails");
         setUserDetails(null);
       }
       
@@ -100,10 +118,17 @@ export function AuthProvider({ children }) {
    * @returns {Promise<UserCredential>} Firebase user credential
    */
   const login = async (email, password) => {
+    console.log("Login attempt for email:", email);
     setError(null);
     try {
-      return await signInWithEmailAndPassword(auth, email, password);
+      console.log("Calling Firebase signInWithEmailAndPassword");
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log("Firebase authentication successful:", result);
+      return result;
     } catch (err) {
+      console.error("Firebase authentication error:", err);
+      console.error("Error code:", err.code);
+      console.error("Error message:", err.message);
       setError(err.message);
       throw err;
     }
@@ -117,10 +142,12 @@ export function AuthProvider({ children }) {
    * @returns {Promise<UserCredential>} Firebase user credential
    */
   const register = async (email, password, displayName) => {
+    console.log("Register attempt for email:", email);
     setError(null);
     try {
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log("User created in Firebase Auth:", userCredential);
       
       // Update profile with display name
       await updateProfile(userCredential.user, {
@@ -144,10 +171,12 @@ export function AuthProvider({ children }) {
         isDeleted: false
       };
       
+      console.log("Creating Firestore document for new user:", userDoc);
       await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), userDoc);
       
       return userCredential;
     } catch (err) {
+      console.error("Registration error:", err);
       setError(err.message);
       throw err;
     }
@@ -158,10 +187,13 @@ export function AuthProvider({ children }) {
    * @returns {Promise<void>}
    */
   const logout = async () => {
+    console.log("Logout attempt");
     setError(null);
     try {
       await signOut(auth);
+      console.log("Logout successful");
     } catch (err) {
+      console.error("Logout error:", err);
       setError(err.message);
       throw err;
     }
@@ -173,10 +205,13 @@ export function AuthProvider({ children }) {
    * @returns {Promise<void>}
    */
   const resetPassword = async (email) => {
+    console.log("Password reset attempt for email:", email);
     setError(null);
     try {
       await sendPasswordResetEmail(auth, email);
+      console.log("Password reset email sent");
     } catch (err) {
+      console.error("Password reset error:", err);
       setError(err.message);
       throw err;
     }
@@ -188,6 +223,7 @@ export function AuthProvider({ children }) {
    * @returns {Promise<void>}
    */
   const updateUserEmail = async (newEmail) => {
+    console.log("Update email attempt to:", newEmail);
     setError(null);
     if (!currentUser) {
       throw new Error('No user is logged in');
@@ -202,7 +238,9 @@ export function AuthProvider({ children }) {
         email: newEmail,
         updatedAt: serverTimestamp()
       });
+      console.log("Email updated successfully");
     } catch (err) {
+      console.error("Update email error:", err);
       setError(err.message);
       throw err;
     }
@@ -214,6 +252,7 @@ export function AuthProvider({ children }) {
    * @returns {Promise<void>}
    */
   const updateUserPassword = async (newPassword) => {
+    console.log("Update password attempt");
     setError(null);
     if (!currentUser) {
       throw new Error('No user is logged in');
@@ -228,7 +267,9 @@ export function AuthProvider({ children }) {
         'security.lastPasswordChange': serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      console.log("Password updated successfully");
     } catch (err) {
+      console.error("Update password error:", err);
       setError(err.message);
       throw err;
     }
@@ -240,6 +281,7 @@ export function AuthProvider({ children }) {
    * @returns {Promise<void>}
    */
   const updateUserProfile = async (profileData) => {
+    console.log("Update profile attempt with data:", profileData);
     setError(null);
     if (!currentUser) {
       throw new Error('No user is logged in');
@@ -265,7 +307,9 @@ export function AuthProvider({ children }) {
         ...prevDetails,
         ...profileData
       }));
+      console.log("Profile updated successfully");
     } catch (err) {
+      console.error("Update profile error:", err);
       setError(err.message);
       throw err;
     }
@@ -273,12 +317,20 @@ export function AuthProvider({ children }) {
 
   // Check if user has a specific role
   const hasRole = (role) => {
+    console.log(`Checking if user has role: ${role}`);
+    console.log(`User details role: ${userDetails?.role}`);
     return userDetails?.role === role;
   };
 
   // Check if user is an admin
   const isAdmin = () => {
-    return userDetails?.role === USER_ROLES.ADMIN || userDetails?.role === USER_ROLES.MODERATOR;
+    console.log("Checking if user is admin");
+    console.log(`User details role: ${userDetails?.role}`);
+    console.log(`Admin role constant: ${USER_ROLES.ADMIN}`);
+    console.log(`Moderator role constant: ${USER_ROLES.MODERATOR}`);
+    const result = userDetails?.role === USER_ROLES.ADMIN || userDetails?.role === USER_ROLES.MODERATOR;
+    console.log(`Is admin result: ${result}`);
+    return result;
   };
 
   // Context value
@@ -297,6 +349,9 @@ export function AuthProvider({ children }) {
     hasRole,
     isAdmin
   };
+
+  console.log("Auth provider rendering with currentUser:", currentUser ? currentUser.email : null);
+  console.log("User details:", userDetails);
 
   return (
     <AuthContext.Provider value={value}>
