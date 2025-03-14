@@ -5,7 +5,8 @@ import {
     Database, Settings, BellRing, LogOut, Search, Menu,
     FileText, ChevronRight, Sun, Moon, Shield
 } from 'lucide-react';
-import { Link, useLocation, Outlet } from 'react-router-dom';
+import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 // Import the logo (you can change the path as needed)
 import LogoImage from '../assets/logo.png';
@@ -14,6 +15,8 @@ const AdminLayout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isDarkMode, setIsDarkMode] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
+    const { logout } = useAuth();
 
     // Function to determine active tab based on current path
     const getActiveTabFromPath = (path) => {
@@ -78,6 +81,7 @@ const AdminLayout = () => {
             path: "/settings"
         }
     ];
+    
     const toggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen);
     };
@@ -85,6 +89,17 @@ const AdminLayout = () => {
     const toggleDarkMode = () => {
         setIsDarkMode(!isDarkMode);
         // You can add logic here to apply dark mode to the entire app
+    };
+    
+    const handleLogout = async () => {
+        try {
+            await logout();
+            // Redirect to login page after successful logout
+            navigate('/login');
+        } catch (error) {
+            console.error('Logout failed:', error);
+            alert('Failed to log out. Please try again.');
+        }
     };
 
     return (
@@ -203,7 +218,10 @@ const AdminLayout = () => {
                         </div>
                     )}
 
-                    <button className="flex items-center justify-center gap-2 w-full py-2.5 px-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white">
+                    <button 
+                        onClick={handleLogout}
+                        className="flex items-center justify-center gap-2 w-full py-2.5 px-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white"
+                    >
                         <LogOut size={16} />
                         {isSidebarOpen && <span className="text-sm">Logout</span>}
                     </button>

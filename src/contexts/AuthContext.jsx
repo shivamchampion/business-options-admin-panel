@@ -53,45 +53,38 @@ export function AuthProvider({ children }) {
           const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
           const userDocSnap = await getDoc(userDocRef, { source: 'server' }); // Force server refresh
           
-          console.log("Firestore document exists:", userDocSnap.exists());
-          
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             console.log("Firestore user data:", userData);
-            
-            // Check if role field exists and has correct format
-            if (!userData.role) {
-              console.warn("User document is missing role field, setting default");
-              userData.role = USER_ROLES.USER; // Set default role
-              
-              // Update the document with the role
-              await updateDoc(userDocRef, {
-                role: USER_ROLES.USER
-              });
-            }
-            
-            // If this is our known admin account, make sure it's set as admin
-            if (user.email === 'admin@businessoptions.in' && userData.role.toLowerCase() !== USER_ROLES.ADMIN.toLowerCase()) {
-              console.warn("Admin account detected with incorrect role, fixing...");
-              userData.role = USER_ROLES.ADMIN;
-              
-              // Update the document with admin role
-              await updateDoc(userDocRef, {
-                role: USER_ROLES.ADMIN
-              });
-            }
-            
-            console.log(`User role from Firestore: "${userData.role}", Admin role constant: "${USER_ROLES.ADMIN}"`);
-            console.log(`Is admin check: ${userData.role.toLowerCase() === USER_ROLES.ADMIN.toLowerCase()}`);
             
             // Make sure we're comparing lowercase strings to avoid case sensitivity issues
             userData.role = userData.role ? userData.role.toLowerCase() : '';
             
             setUserDetails(userData);
+            
+            // Check if the special admin account needs a role update
+            if (user.email === 'admin@businessoptions.in' && user.uid === 'ZmzFLxbtzGNYnDI1IJsTMDxva3y2') {
+              if (userData.role !== USER_ROLES.ADMIN.toLowerCase()) {
+                console.log("Updating admin role for admin@businessoptions.in");
+                await updateDoc(userDocRef, {
+                  role: USER_ROLES.ADMIN.toLowerCase(),
+                  updatedAt: serverTimestamp()
+                });
+                // Update local state to reflect the change
+                setUserDetails({
+                  ...userData,
+                  role: USER_ROLES.ADMIN.toLowerCase()
+                });
+              }
+            }
+            
+            // Update last login timestamp
+            await updateDoc(userDocRef, {
+              lastLogin: serverTimestamp()
+            });
           } else {
             console.log("User document doesn't exist in Firestore, creating new document");
             // Create a basic user document if it doesn't exist
-            // This can happen if user was created through Auth but Firestore doc wasn't created
             const userDoc = {
               uid: user.uid,
               email: user.email,
@@ -99,7 +92,7 @@ export function AuthProvider({ children }) {
               status: USER_STATUS.ACTIVE,
               role: user.email === 'admin@businessoptions.in' ? 
                 USER_ROLES.ADMIN.toLowerCase() : 
-                USER_ROLES.USER.toLowerCase(), // Ensure consistent case
+                USER_ROLES.USER.toLowerCase(),
               emailVerified: user.emailVerified,
               phoneNumber: user.phoneNumber || '',
               phoneVerified: false,
@@ -110,20 +103,8 @@ export function AuthProvider({ children }) {
               isDeleted: false
             };
             
-            console.log("New user document to create:", userDoc);
             await setDoc(userDocRef, userDoc);
             setUserDetails(userDoc);
-          }
-          
-          // Update last login timestamp
-          console.log("Updating last login timestamp");
-          try {
-            await updateDoc(userDocRef, {
-              lastLogin: serverTimestamp()
-            });
-            console.log("Last login timestamp updated successfully");
-          } catch (updateError) {
-            console.error("Error updating last login:", updateError);
           }
         } catch (err) {
           console.error("Error fetching user details:", err);
@@ -150,14 +131,11 @@ export function AuthProvider({ children }) {
     console.log("Login attempt for email:", email);
     setError(null);
     try {
-      console.log("Calling Firebase signInWithEmailAndPassword");
       const result = await signInWithEmailAndPassword(auth, email, password);
       console.log("Firebase authentication successful:", result);
       return result;
     } catch (err) {
       console.error("Firebase authentication error:", err);
-      console.error("Error code:", err.code);
-      console.error("Error message:", err.message);
       setError(err.message);
       throw err;
     }
@@ -176,7 +154,6 @@ export function AuthProvider({ children }) {
     try {
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      console.log("User created in Firebase Auth:", userCredential);
       
       // Update profile with display name
       await updateProfile(userCredential.user, {
@@ -191,7 +168,7 @@ export function AuthProvider({ children }) {
         status: USER_STATUS.ACTIVE,
         role: email === 'admin@businessoptions.in' ? 
           USER_ROLES.ADMIN.toLowerCase() : 
-          USER_ROLES.USER.toLowerCase(), // Set admin for known admin email
+          USER_ROLES.USER.toLowerCase(),
         emailVerified: userCredential.user.emailVerified,
         phoneNumber: '',
         phoneVerified: false,
@@ -202,7 +179,6 @@ export function AuthProvider({ children }) {
         isDeleted: false
       };
       
-      console.log("Creating Firestore document for new user:", userDoc);
       await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), userDoc);
       
       return userCredential;
@@ -223,6 +199,9 @@ export function AuthProvider({ children }) {
     try {
       await signOut(auth);
       console.log("Logout successful");
+      // Force clear user state
+      setCurrentUser(null);
+      setUserDetails(null);
     } catch (err) {
       console.error("Logout error:", err);
       setError(err.message);
@@ -352,14 +331,12 @@ export function AuthProvider({ children }) {
    * @returns {boolean} - Whether user has the role
    */
   const hasRole = (role) => {
-    console.log(`Checking if user has role: ${role}`);
-    console.log(`User details role: ${userDetails?.role}`);
+    if (!userDetails || !userDetails.role) return false;
     
     // Case-insensitive comparison
-    const userRole = userDetails?.role?.toLowerCase() || '';
-    const checkRole = role?.toLowerCase() || '';
+    const userRole = userDetails.role.toLowerCase();
+    const checkRole = role.toLowerCase();
     
-    console.log(`Normalized roles for comparison: user=${userRole}, check=${checkRole}`);
     return userRole === checkRole;
   };
 
@@ -368,27 +345,20 @@ export function AuthProvider({ children }) {
    * @returns {boolean} - Whether user is an admin
    */
   const isAdmin = () => {
-    console.log("Checking if user is admin");
-    console.log(`User details role: ${userDetails?.role}`);
-    console.log(`Admin role constant: ${USER_ROLES.ADMIN}`);
-    console.log(`Moderator role constant: ${USER_ROLES.MODERATOR}`);
+    if (!userDetails || !userDetails.role) return false;
     
     // Case-insensitive comparison
-    const userRole = userDetails?.role?.toLowerCase() || '';
+    const userRole = userDetails.role.toLowerCase();
     const adminRole = USER_ROLES.ADMIN.toLowerCase();
     const moderatorRole = USER_ROLES.MODERATOR.toLowerCase();
     
-    console.log(`Normalized roles for comparison: user=${userRole}, admin=${adminRole}, moderator=${moderatorRole}`);
-    
     // Special case for the known admin
-    if (currentUser?.email === 'admin@businessoptions.in') {
-      console.log("Admin email detected, granting admin access");
+    if (currentUser?.email === 'admin@businessoptions.in' && 
+        currentUser?.uid === 'ZmzFLxbtzGNYnDI1IJsTMDxva3y2') {
       return true;
     }
     
-    const result = userRole === adminRole || userRole === moderatorRole;
-    console.log(`Is admin result: ${result}`);
-    return result;
+    return userRole === adminRole || userRole === moderatorRole;
   };
 
   // Context value
@@ -407,9 +377,6 @@ export function AuthProvider({ children }) {
     hasRole,
     isAdmin
   };
-
-  console.log("Auth provider rendering with currentUser:", currentUser ? currentUser.email : null);
-  console.log("User details:", userDetails);
 
   return (
     <AuthContext.Provider value={value}>
