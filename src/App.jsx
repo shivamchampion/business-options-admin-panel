@@ -30,6 +30,17 @@ function App() {
     userDetails.role === USER_ROLES.MODERATOR
   );
   
+  // For easier debugging, log the authorization check
+  if (currentUser && userDetails) {
+    console.log('Authorization check:', {
+      currentUser: currentUser.email,
+      userRole: userDetails.role,
+      adminRole: USER_ROLES.ADMIN,
+      moderatorRole: USER_ROLES.MODERATOR,
+      isAdmin: isAdmin
+    });
+  }
+  
   // Show login page if not authenticated or not an admin
   if (!isAdmin) {
     return <LoginPage />;

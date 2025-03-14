@@ -1,10 +1,11 @@
-/**
- * Login Page Component
- * Handles user authentication to the admin panel
- */
+// Updated LoginPage.jsx to restrict access to only admin users
+
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { COLLECTIONS, USER_ROLES } from '../config/constants';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -27,17 +28,40 @@ const LoginPage = () => {
     try {
       setError('');
       setLoading(true);
-      await login(email, password);
-      // Successful login is handled by the AuthContext
+      
+      // First, authenticate the user
+      const userCredential = await login(email, password);
+      
+      // Then check if the user has admin privileges
+      const userDocRef = doc(db, COLLECTIONS.USERS, userCredential.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        throw new Error('User profile not found');
+      }
+      
+      const userData = userDoc.data();
+      
+      // Check if user has admin role
+      if (userData.role !== USER_ROLES.ADMIN && userData.role !== USER_ROLES.MODERATOR) {
+        // Sign out the user if they're not an admin
+        await logout();
+        throw new Error('Access denied. Only administrators can log in to this panel.');
+      }
+      
+      // If we get here, the user is an admin and will be redirected to the dashboard
+      // by the AuthContext
+      
     } catch (error) {
       setError(
-        error.code === 'auth/invalid-credential'
+        error.message === 'Access denied. Only administrators can log in to this panel.'
+          ? error.message
+          : error.code === 'auth/invalid-credential'
           ? 'Invalid email or password'
           : error.code === 'auth/too-many-requests'
           ? 'Too many failed login attempts. Please try again later.'
           : 'Failed to sign in. Please check your credentials.'
       );
-    } finally {
       setLoading(false);
     }
   };
