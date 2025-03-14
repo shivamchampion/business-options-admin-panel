@@ -48,18 +48,41 @@ export function AuthProvider({ children }) {
       
       if (user) {
         try {
-          // Get additional user data from Firestore
+          // Get additional user data from Firestore with force refresh
           console.log(`Fetching Firestore user document for UID: ${user.uid}`);
           const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
-          const userDocSnap = await getDoc(userDocRef);
+          const userDocSnap = await getDoc(userDocRef, { source: 'server' }); // Force server refresh
           
           console.log("Firestore document exists:", userDocSnap.exists());
           
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             console.log("Firestore user data:", userData);
+            
+            // Check if role field exists and has correct format
+            if (!userData.role) {
+              console.warn("User document is missing role field, setting default");
+              userData.role = USER_ROLES.USER; // Set default role
+              
+              // Update the document with the role
+              await updateDoc(userDocRef, {
+                role: USER_ROLES.USER
+              });
+            }
+            
+            // If this is our known admin account, make sure it's set as admin
+            if (user.email === 'admin@businessoptions.in' && userData.role.toLowerCase() !== USER_ROLES.ADMIN.toLowerCase()) {
+              console.warn("Admin account detected with incorrect role, fixing...");
+              userData.role = USER_ROLES.ADMIN;
+              
+              // Update the document with admin role
+              await updateDoc(userDocRef, {
+                role: USER_ROLES.ADMIN
+              });
+            }
+            
             console.log(`User role from Firestore: "${userData.role}", Admin role constant: "${USER_ROLES.ADMIN}"`);
-            console.log(`Is admin check: ${userData.role === USER_ROLES.ADMIN}`);
+            console.log(`Is admin check: ${userData.role.toLowerCase() === USER_ROLES.ADMIN.toLowerCase()}`);
             
             // Make sure we're comparing lowercase strings to avoid case sensitivity issues
             userData.role = userData.role ? userData.role.toLowerCase() : '';
@@ -74,7 +97,9 @@ export function AuthProvider({ children }) {
               email: user.email,
               displayName: user.displayName || user.email.split('@')[0],
               status: USER_STATUS.ACTIVE,
-              role: USER_ROLES.USER.toLowerCase(), // Ensure consistent case
+              role: user.email === 'admin@businessoptions.in' ? 
+                USER_ROLES.ADMIN.toLowerCase() : 
+                USER_ROLES.USER.toLowerCase(), // Ensure consistent case
               emailVerified: user.emailVerified,
               phoneNumber: user.phoneNumber || '',
               phoneVerified: false,
@@ -164,7 +189,9 @@ export function AuthProvider({ children }) {
         email,
         displayName: displayName || email.split('@')[0],
         status: USER_STATUS.ACTIVE,
-        role: USER_ROLES.USER.toLowerCase(), // Ensure consistent case
+        role: email === 'admin@businessoptions.in' ? 
+          USER_ROLES.ADMIN.toLowerCase() : 
+          USER_ROLES.USER.toLowerCase(), // Set admin for known admin email
         emailVerified: userCredential.user.emailVerified,
         phoneNumber: '',
         phoneVerified: false,
@@ -352,6 +379,12 @@ export function AuthProvider({ children }) {
     const moderatorRole = USER_ROLES.MODERATOR.toLowerCase();
     
     console.log(`Normalized roles for comparison: user=${userRole}, admin=${adminRole}, moderator=${moderatorRole}`);
+    
+    // Special case for the known admin
+    if (currentUser?.email === 'admin@businessoptions.in') {
+      console.log("Admin email detected, granting admin access");
+      return true;
+    }
     
     const result = userRole === adminRole || userRole === moderatorRole;
     console.log(`Is admin result: ${result}`);
