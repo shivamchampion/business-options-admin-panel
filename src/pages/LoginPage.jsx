@@ -15,7 +15,7 @@ const LoginPage = () => {
   const [resetMode, setResetMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   
-  const { login, resetPassword } = useAuth();
+  const { login, resetPassword, logout } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -42,8 +42,19 @@ const LoginPage = () => {
       
       const userData = userDoc.data();
       
+      // Case-insensitive check for admin role
+      const userRole = userData.role?.toLowerCase() || '';
+      const adminRole = USER_ROLES.ADMIN.toLowerCase();
+      const moderatorRole = USER_ROLES.MODERATOR.toLowerCase();
+      
+      console.log('Login role check:', {
+        userRole,
+        adminRole,
+        moderatorRole
+      });
+      
       // Check if user has admin role
-      if (userData.role !== USER_ROLES.ADMIN && userData.role !== USER_ROLES.MODERATOR) {
+      if (userRole !== adminRole && userRole !== moderatorRole) {
         // Sign out the user if they're not an admin
         await logout();
         throw new Error('Access denied. Only administrators can log in to this panel.');

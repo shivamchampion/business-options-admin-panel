@@ -10,7 +10,7 @@ import { USER_ROLES } from './config/constants';
 import './App.css';
 
 function App() {
-  const { currentUser, userDetails, loading } = useAuth();
+  const { currentUser, userDetails, loading, isAdmin } = useAuth();
   
   // Show loading state
   if (loading) {
@@ -24,11 +24,8 @@ function App() {
     );
   }
   
-  // Check if user is logged in and has admin privileges
-  const isAdmin = currentUser && userDetails && (
-    userDetails.role === USER_ROLES.ADMIN || 
-    userDetails.role === USER_ROLES.MODERATOR
-  );
+  // Check if user is logged in and has admin privileges using the isAdmin function
+  const hasAdminAccess = currentUser && userDetails && isAdmin();
   
   // For easier debugging, log the authorization check
   if (currentUser && userDetails) {
@@ -37,12 +34,12 @@ function App() {
       userRole: userDetails.role,
       adminRole: USER_ROLES.ADMIN,
       moderatorRole: USER_ROLES.MODERATOR,
-      isAdmin: isAdmin
+      isAdmin: hasAdminAccess
     });
   }
   
   // Show login page if not authenticated or not an admin
-  if (!isAdmin) {
+  if (!hasAdminAccess) {
     return <LoginPage />;
   }
   

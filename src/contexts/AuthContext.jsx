@@ -58,8 +58,12 @@ export function AuthProvider({ children }) {
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             console.log("Firestore user data:", userData);
-            console.log(`User role: ${userData.role}, Admin role constant: ${USER_ROLES.ADMIN}`);
+            console.log(`User role from Firestore: "${userData.role}", Admin role constant: "${USER_ROLES.ADMIN}"`);
             console.log(`Is admin check: ${userData.role === USER_ROLES.ADMIN}`);
+            
+            // Make sure we're comparing lowercase strings to avoid case sensitivity issues
+            userData.role = userData.role ? userData.role.toLowerCase() : '';
+            
             setUserDetails(userData);
           } else {
             console.log("User document doesn't exist in Firestore, creating new document");
@@ -70,7 +74,7 @@ export function AuthProvider({ children }) {
               email: user.email,
               displayName: user.displayName || user.email.split('@')[0],
               status: USER_STATUS.ACTIVE,
-              role: USER_ROLES.USER,
+              role: USER_ROLES.USER.toLowerCase(), // Ensure consistent case
               emailVerified: user.emailVerified,
               phoneNumber: user.phoneNumber || '',
               phoneVerified: false,
@@ -160,7 +164,7 @@ export function AuthProvider({ children }) {
         email,
         displayName: displayName || email.split('@')[0],
         status: USER_STATUS.ACTIVE,
-        role: USER_ROLES.USER,
+        role: USER_ROLES.USER.toLowerCase(), // Ensure consistent case
         emailVerified: userCredential.user.emailVerified,
         phoneNumber: '',
         phoneVerified: false,
@@ -315,20 +319,41 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Check if user has a specific role
+  /**
+   * Check if user has a specific role (case-insensitive)
+   * @param {string} role - Role to check
+   * @returns {boolean} - Whether user has the role
+   */
   const hasRole = (role) => {
     console.log(`Checking if user has role: ${role}`);
     console.log(`User details role: ${userDetails?.role}`);
-    return userDetails?.role === role;
+    
+    // Case-insensitive comparison
+    const userRole = userDetails?.role?.toLowerCase() || '';
+    const checkRole = role?.toLowerCase() || '';
+    
+    console.log(`Normalized roles for comparison: user=${userRole}, check=${checkRole}`);
+    return userRole === checkRole;
   };
 
-  // Check if user is an admin
+  /**
+   * Check if user is an admin
+   * @returns {boolean} - Whether user is an admin
+   */
   const isAdmin = () => {
     console.log("Checking if user is admin");
     console.log(`User details role: ${userDetails?.role}`);
     console.log(`Admin role constant: ${USER_ROLES.ADMIN}`);
     console.log(`Moderator role constant: ${USER_ROLES.MODERATOR}`);
-    const result = userDetails?.role === USER_ROLES.ADMIN || userDetails?.role === USER_ROLES.MODERATOR;
+    
+    // Case-insensitive comparison
+    const userRole = userDetails?.role?.toLowerCase() || '';
+    const adminRole = USER_ROLES.ADMIN.toLowerCase();
+    const moderatorRole = USER_ROLES.MODERATOR.toLowerCase();
+    
+    console.log(`Normalized roles for comparison: user=${userRole}, admin=${adminRole}, moderator=${moderatorRole}`);
+    
+    const result = userRole === adminRole || userRole === moderatorRole;
     console.log(`Is admin result: ${result}`);
     return result;
   };
