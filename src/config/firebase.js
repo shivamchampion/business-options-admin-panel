@@ -1,3 +1,5 @@
+// src/config/firebase.js
+
 /**
  * Firebase configuration and initialization
  * This file sets up and exports Firebase services used throughout the application
@@ -53,28 +55,45 @@ export const auth = getAuth(app);
 export const storage = getStorage(app);
 export { db };
 
-// Connect to Firebase emulators when in development mode
-if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
-  // Connect to Auth emulator
-  const authEmulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST || 'http://localhost:9099';
-  connectAuthEmulator(auth, authEmulatorHost);
-  console.log('Connected to Firebase Auth Emulator');
-  
-  // Connect to Firestore emulator if needed
-  if (import.meta.env.VITE_FIREBASE_FIRESTORE_EMULATOR_HOST) {
-    const [host, portStr] = import.meta.env.VITE_FIREBASE_FIRESTORE_EMULATOR_HOST.split(':');
-    const port = parseInt(portStr, 10) || 8080;
-    connectFirestoreEmulator(db, host, port);
-    console.log(`Connected to Firebase Firestore Emulator at ${host}:${port}`);
-  }
-  
-  // Connect to Storage emulator if needed
-  if (import.meta.env.VITE_FIREBASE_STORAGE_EMULATOR_HOST) {
-    const [host, portStr] = import.meta.env.VITE_FIREBASE_STORAGE_EMULATOR_HOST.split(':');
-    const port = parseInt(portStr, 10) || 9199;
-    connectStorageEmulator(storage, host, port);
-    console.log(`Connected to Firebase Storage Emulator at ${host}:${port}`);
+// Flag to determine if we should use emulators
+const shouldUseEmulators = import.meta.env.DEV && 
+                          import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' &&
+                          navigator.onLine; // Only try to use emulators if online
+
+// Connect to Firebase emulators when in development mode and emulators flag is true
+if (shouldUseEmulators) {
+  try {
+    // Connect to Auth emulator
+    const authEmulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST || 'http://localhost:9099';
+    connectAuthEmulator(auth, authEmulatorHost, { disableWarnings: true });
+    console.log('Connected to Firebase Auth Emulator');
+    
+    // Connect to Firestore emulator if needed
+    if (import.meta.env.VITE_FIREBASE_FIRESTORE_EMULATOR_HOST) {
+      const [host, portStr] = import.meta.env.VITE_FIREBASE_FIRESTORE_EMULATOR_HOST.split(':');
+      const port = parseInt(portStr, 10) || 8080;
+      connectFirestoreEmulator(db, host, port);
+      console.log(`Connected to Firebase Firestore Emulator at ${host}:${port}`);
+    }
+    
+    // Connect to Storage emulator if needed
+    if (import.meta.env.VITE_FIREBASE_STORAGE_EMULATOR_HOST) {
+      const [host, portStr] = import.meta.env.VITE_FIREBASE_STORAGE_EMULATOR_HOST.split(':');
+      const port = parseInt(portStr, 10) || 9199;
+      connectStorageEmulator(storage, host, port);
+      console.log(`Connected to Firebase Storage Emulator at ${host}:${port}`);
+    }
+  } catch (error) {
+    console.error('Error connecting to Firebase emulators:', error);
+    console.warn('Falling back to production Firebase services');
   }
 }
+
+// Export information about environment for debugging
+export const firebaseInfo = {
+  usingEmulators: shouldUseEmulators,
+  environment: import.meta.env.MODE,
+  projectId: firebaseConfig.projectId
+};
 
 export default app;

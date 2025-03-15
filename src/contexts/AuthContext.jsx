@@ -1,3 +1,5 @@
+// src/contexts/AuthContext.jsx
+
 /**
  * Authentication Context
  * Manages user authentication state and related functions
@@ -37,6 +39,21 @@ export function AuthProvider({ children }) {
   const [userDetails, setUserDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [offline, setOffline] = useState(!navigator.onLine);
+
+  // Handle online/offline events
+  useEffect(() => {
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Listen for auth state changes
   useEffect(() => {
@@ -47,67 +64,39 @@ export function AuthProvider({ children }) {
       
       if (user) {
         try {
-          // Get additional user data from Firestore with force refresh
+          // Get additional user data from Firestore
           console.log(`Fetching Firestore user document for UID: ${user.uid}`);
           const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
-          const userDocSnap = await getDoc(userDocRef, { source: 'server' }); // Force server refresh
           
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            console.log("Firestore user data:", userData);
+          try {
+            // Try to get fresh data from server
+            const userDocSnap = await getDoc(userDocRef, { source: 'server' });
+            handleUserDocSnapshot(userDocSnap, user);
+          } catch (serverError) {
+            console.warn("Failed to fetch from server, trying cache:", serverError);
             
-            // Make sure we're comparing lowercase strings to avoid case sensitivity issues
-            userData.role = userData.role ? userData.role.toLowerCase() : '';
-            
-            setUserDetails(userData);
-            
-            // Check if the special admin account needs a role update
-            if (user.email === 'admin@businessoptions.in' && user.uid === 'ZmzFLxbtzGNYnDI1IJsTMDxva3y2') {
-              if (userData.role !== USER_ROLES.ADMIN.toLowerCase()) {
-                console.log("Updating admin role for admin@businessoptions.in");
-                await updateDoc(userDocRef, {
-                  role: USER_ROLES.ADMIN.toLowerCase(),
-                  updatedAt: serverTimestamp()
-                });
-                // Update local state to reflect the change
-                setUserDetails({
-                  ...userData,
-                  role: USER_ROLES.ADMIN.toLowerCase()
-                });
-              }
+            // Fall back to cache if server request fails
+            try {
+              const userDocSnap = await getDoc(userDocRef, { source: 'cache' });
+              handleUserDocSnapshot(userDocSnap, user);
+            } catch (cacheError) {
+              console.warn("Failed to fetch from cache, creating new document:", cacheError);
+              
+              // Create a basic user document if it doesn't exist or can't be retrieved
+              createNewUserDocument(user);
             }
-            
-            // Update last login timestamp
-            await updateDoc(userDocRef, {
-              lastLogin: serverTimestamp()
-            });
-          } else {
-            console.log("User document doesn't exist in Firestore, creating new document");
-            // Create a basic user document if it doesn't exist
-            const userDoc = {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName || user.email.split('@')[0],
-              status: USER_STATUS.ACTIVE,
-              role: user.email === 'admin@businessoptions.in' ? 
-                USER_ROLES.ADMIN.toLowerCase() : 
-                USER_ROLES.USER.toLowerCase(),
-              emailVerified: user.emailVerified,
-              phoneNumber: user.phoneNumber || '',
-              phoneVerified: false,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              lastLogin: serverTimestamp(),
-              version: 1,
-              isDeleted: false
-            };
-            
-            await setDoc(userDocRef, userDoc);
-            setUserDetails(userDoc);
           }
         } catch (err) {
           console.error("Error fetching user details:", err);
           setError(err.message);
+          
+          // Provide basic user details
+          setUserDetails({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || user.email.split('@')[0],
+            role: user.email === 'admin@businessoptions.in' ? USER_ROLES.ADMIN.toLowerCase() : USER_ROLES.USER.toLowerCase()
+          });
         }
       } else {
         console.log("No user signed in, clearing userDetails");
@@ -119,6 +108,98 @@ export function AuthProvider({ children }) {
 
     return unsubscribe;
   }, []);
+  
+  // Helper function to handle user document snapshot
+  const handleUserDocSnapshot = (docSnap, user) => {
+    if (docSnap.exists()) {
+      const userData = docSnap.data();
+      console.log("Firestore user data:", userData);
+      
+      // Make sure we're comparing lowercase strings to avoid case sensitivity issues
+      userData.role = userData.role ? userData.role.toLowerCase() : '';
+      
+      setUserDetails(userData);
+      
+      // Check if the special admin account needs a role update
+      if (user.email === 'admin@businessoptions.in' && user.uid === 'ZmzFLxbtzGNYnDI1IJsTMDxva3y2') {
+        if (userData.role !== USER_ROLES.ADMIN.toLowerCase()) {
+          console.log("Updating admin role for admin@businessoptions.in");
+          updateUserRole(docSnap.ref, userData);
+        }
+      }
+      
+      // Update last login timestamp (but don't wait for it)
+      updateLastLogin(docSnap.ref);
+    } else {
+      console.log("User document doesn't exist in Firestore, creating new document");
+      createNewUserDocument(user);
+    }
+  };
+  
+  // Helper function to update user role
+  const updateUserRole = async (userRef, userData) => {
+    try {
+      await updateDoc(userRef, {
+        role: USER_ROLES.ADMIN.toLowerCase(),
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update local state to reflect the change
+      setUserDetails({
+        ...userData,
+        role: USER_ROLES.ADMIN.toLowerCase()
+      });
+    } catch (error) {
+      console.error("Failed to update user role:", error);
+    }
+  };
+  
+  // Helper function to update last login
+  const updateLastLogin = async (userRef) => {
+    try {
+      await updateDoc(userRef, {
+        lastLogin: serverTimestamp()
+      });
+    } catch (error) {
+      console.warn("Failed to update last login timestamp:", error);
+    }
+  };
+  
+  // Helper function to create new user document
+  const createNewUserDocument = async (user) => {
+    try {
+      const userDoc = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || user.email.split('@')[0],
+        status: USER_STATUS.ACTIVE,
+        role: user.email === 'admin@businessoptions.in' ? 
+          USER_ROLES.ADMIN.toLowerCase() : 
+          USER_ROLES.USER.toLowerCase(),
+        emailVerified: user.emailVerified,
+        phoneNumber: user.phoneNumber || '',
+        phoneVerified: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+        version: 1,
+        isDeleted: false
+      };
+      
+      const userRef = doc(db, COLLECTIONS.USERS, user.uid);
+      await setDoc(userRef, userDoc);
+      setUserDetails(userDoc);
+    } catch (error) {
+      console.error("Failed to create new user document:", error);
+      // Still set basic user details for UI
+      setUserDetails({
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || user.email.split('@')[0],
+        role: user.email === 'admin@businessoptions.in' ? USER_ROLES.ADMIN.toLowerCase() : USER_ROLES.USER.toLowerCase()
+      });
+    }
+  };
 
   /**
    * Logs in with email and password
@@ -361,6 +442,7 @@ export function AuthProvider({ children }) {
     userDetails,
     loading,
     error,
+    offline,
     login,
     logout,
     resetPassword,

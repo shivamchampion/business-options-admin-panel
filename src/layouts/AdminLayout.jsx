@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Import the logo (you can change the path as needed)
 import LogoImage from '../assets/logo.png';
+import NetworkStatus from '../components/common/NetworkStatus';
 
 const AdminLayout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -262,6 +263,7 @@ const AdminLayout = () => {
                     <Outlet context={[isDarkMode, setIsDarkMode]} />
                 </main>
             </div>
+            <NetworkStatus />
         </div>
     );
 };

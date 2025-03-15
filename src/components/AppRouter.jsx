@@ -15,7 +15,12 @@ import SettingsPage from '../pages/SettingsPage';
 
 const AppRouter = ({ isAuthenticated }) => {
   return (
-    <Routes>
+    <Routes
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true
+    }}
+    >
       {/* Public route */}
       <Route path="/login" element={
         isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
