@@ -2,15 +2,23 @@
  * Firebase configuration and initialization
  * This file sets up and exports Firebase services used throughout the application
  */
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
   getFirestore, 
   initializeFirestore, 
   CACHE_SIZE_UNLIMITED,
-  connectFirestoreEmulator 
+  connectFirestoreEmulator,
+  persistentLocalCache,
+  persistentMultipleTabManager
 } from "firebase/firestore";
-import { getAuth, connectAuthEmulator } from "firebase/auth";
-import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { 
+  getAuth, 
+  connectAuthEmulator 
+} from "firebase/auth";
+import { 
+  getStorage, 
+  connectStorageEmulator 
+} from "firebase/storage";
 
 // Firebase configuration with environment variables
 const firebaseConfig = {
@@ -22,21 +30,17 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase app
-const app = initializeApp(firebaseConfig);
+// Ensure only one app is initialized
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with persistence settings
+// Initialize Firestore with improved persistence settings
 let db;
 try {
-  // Use the new cache configuration instead of enableIndexedDbPersistence()
+  // Use persistent local cache with multi-tab synchronization
   db = initializeFirestore(app, {
-    cache: {
-      tabManager: {
-        lruParams: {
-          maxSizeBytes: CACHE_SIZE_UNLIMITED
-        }
-      }
-    }
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
   });
 } catch (error) {
   console.warn('Error initializing Firestore with persistence:', error);

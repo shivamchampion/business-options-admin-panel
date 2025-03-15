@@ -137,14 +137,7 @@ const ListingsPage = () => {
   const [cities, setCities] = useState([]);
   
   // Database and Auth Contexts
-  const { 
-    ListingService, 
-    IndustryService, 
-    TagService, 
-    PlanService, 
-    AnalyticsService,
-    ExportService 
-  } = useDatabase();
+  const database = useDatabase();
   const { userDetails } = useAuth();
   
   // Analytics & Dashboard Metrics
@@ -164,19 +157,24 @@ const ListingsPage = () => {
         setIsLoading(true);
         setError(null);
         
-        // Fetch reference data in parallel
         const [
           industriesData, 
           tagsData, 
           plansData,
           metricsData
         ] = await Promise.all([
-          IndustryService.getAllIndustries(),
-          TagService.getAllTags(),
-          PlanService.getAllPlans(),
-          AnalyticsService.getListingMetrics(userDetails.uid)
+          database.IndustryService.getAllIndustries(), // Changed from database.IndustryService.getAllIndustries()
+          database.TagService.getTags(),    // Changed from database.TagService.getAllTags()
+          database.PlanService.getAllPlans(),      // Changed from database.PlanService.getAllPlans()
+          database.getListingMetrics?.(userDetails.uid) || { // Added fallback in case function doesn't exist
+            totalListings: 0,
+            publishedListings: 0,
+            pendingListings: 0,
+            recentActivity: 0,
+            viewsLastWeek: 0,
+            inquiriesLastWeek: 0
+          }
         ]);
-        
         setIndustries(industriesData || []);
         setTags(tagsData || []);
         setPlans(plansData || []);
@@ -268,14 +266,14 @@ const ListingsPage = () => {
         plan: filters.plan || null
       };
       
-      const response = await ListingService.getListings(
+      const response = await database.ListingService.getListings(  // Changed from ListingService.getListings
         filterParams,
         pagination.pageSize,
         resetPagination ? null : pagination.lastVisible,
         sortConfig.key,
         sortConfig.direction
       );
-      
+
       setListings(response.listings || []);
       setPagination(prev => ({
         ...prev,
@@ -369,10 +367,10 @@ const ListingsPage = () => {
     
     try {
       setIsLoading(true);
-      await ListingService.deleteListing(
-        selectedListingForAction.id, 
-        'Manual deletion by user'
-      );
+     await database.deleteListing(  // Changed from ListingService.deleteListing
+  selectedListingForAction.id, 
+  'Manual deletion by user'
+);
       
       // Refresh listings
       await fetchListings(true);
@@ -402,7 +400,7 @@ const ListingsPage = () => {
         
         await Promise.all(
           selectedListings.map(id => 
-            ListingService.deleteListing(id, 'Bulk deletion by user')
+            database.deleteListing(id, 'Bulk deletion by user')  // Changed from ListingService.deleteListing
           )
         );
         
@@ -432,7 +430,7 @@ const ListingsPage = () => {
       
       await Promise.all(
         selectedListings.map(id => 
-          ListingService.updateListingStatus(id, newStatus)
+          database.updateListingStatus(id, newStatus)  // Changed from database.updateListingStatus
         )
       );
       
@@ -468,7 +466,7 @@ const ListingsPage = () => {
       // If selected listings exist, only export those
       const listingIds = selectedListings.length > 0 ? selectedListings : null;
       
-      const response = await ExportService.exportListings(format, filterParams, listingIds);
+      const response = await database.exportListings(format, filterParams, listingIds);  // Changed from ExportService.exportListings
       
       // Handle the export response (could be a download link or blob)
       if (response.downloadUrl) {
@@ -1605,7 +1603,7 @@ const ListingsPage = () => {
                       <DropdownMenuItem onClick={() => {
                         // Handle status change
                         if (listing.status !== LISTING_STATUS.PUBLISHED) {
-                          ListingService.updateListingStatus(listing.id, LISTING_STATUS.PUBLISHED)
+                          database.updateListingStatus(listing.id, LISTING_STATUS.PUBLISHED)
                             .then(() => fetchListings())
                             .catch(err => console.error(err));
                         }
@@ -1900,7 +1898,7 @@ const ListingsPage = () => {
                         <DropdownMenuItem onClick={() => {
                           // Handle status change
                           if (listing.status !== LISTING_STATUS.PUBLISHED) {
-                            ListingService.updateListingStatus(listing.id, LISTING_STATUS.PUBLISHED)
+                            database.updateListingStatus(listing.id, LISTING_STATUS.PUBLISHED)
                               .then(() => fetchListings())
                               .catch(err => console.error(err));
                           }
