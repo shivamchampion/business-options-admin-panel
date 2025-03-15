@@ -6,6 +6,7 @@ import DashboardPage from '../pages/DashboardPage';
 import UserRolesPage from '../pages/UserRolesPage';
 import AdvisorManagementPage from '../pages/AdvisorManagementPage';
 import ListingsPage from '../pages/ListingsPage';
+import ListingFormPage from '../pages/ListingFormPage'; // Import the new form page
 import UsersPage from '../pages/UsersPage';
 import ApplicationsPage from '../pages/ApplicationsPage';
 import AnalyticsPage from '../pages/AnalyticsPage';
@@ -27,7 +28,12 @@ const AppRouter = ({ isAuthenticated }) => {
         <Route index element={<DashboardPage />} />
         <Route path="user-roles" element={<UserRolesPage />} />
         <Route path="advisors" element={<AdvisorManagementPage />} />
+        
+        {/* Listings routes */}
         <Route path="listings" element={<ListingsPage />} />
+        <Route path="listings/create" element={<ListingFormPage />} />
+        <Route path="listings/edit/:id" element={<ListingFormPage />} />
+        
         <Route path="users" element={<UsersPage />} />
         <Route path="applications" element={<ApplicationsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
