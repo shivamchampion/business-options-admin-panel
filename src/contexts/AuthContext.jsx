@@ -8,10 +8,9 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   sendPasswordResetEmail,
-  createUserWithEmailAndPassword,
-  updateProfile,
   updateEmail,
-  updatePassword
+  updatePassword,
+  updateProfile
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -136,54 +135,6 @@ export function AuthProvider({ children }) {
       return result;
     } catch (err) {
       console.error("Firebase authentication error:", err);
-      setError(err.message);
-      throw err;
-    }
-  };
-
-  /**
-   * Registers a new user
-   * @param {string} email - User email
-   * @param {string} password - User password
-   * @param {string} displayName - User display name
-   * @returns {Promise<UserCredential>} Firebase user credential
-   */
-  const register = async (email, password, displayName) => {
-    console.log("Register attempt for email:", email);
-    setError(null);
-    try {
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Update profile with display name
-      await updateProfile(userCredential.user, {
-        displayName: displayName || email.split('@')[0]
-      });
-      
-      // Create user document in Firestore
-      const userDoc = {
-        uid: userCredential.user.uid,
-        email,
-        displayName: displayName || email.split('@')[0],
-        status: USER_STATUS.ACTIVE,
-        role: email === 'admin@businessoptions.in' ? 
-          USER_ROLES.ADMIN.toLowerCase() : 
-          USER_ROLES.USER.toLowerCase(),
-        emailVerified: userCredential.user.emailVerified,
-        phoneNumber: '',
-        phoneVerified: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-        version: 1,
-        isDeleted: false
-      };
-      
-      await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), userDoc);
-      
-      return userCredential;
-    } catch (err) {
-      console.error("Registration error:", err);
       setError(err.message);
       throw err;
     }
@@ -326,6 +277,49 @@ export function AuthProvider({ children }) {
   };
 
   /**
+   * Creates a new admin user (admin-only function)
+   * @param {Object} userData - User data including email, password, and role
+   * @returns {Promise<string>} - User ID
+   */
+  const createAdminUser = async (userData) => {
+    console.log("Creating admin user:", userData.email);
+    setError(null);
+    
+    if (!currentUser) {
+      throw new Error('You must be logged in to create users');
+    }
+    
+    // Check if current user is admin
+    if (!isAdmin()) {
+      throw new Error('Only administrators can create new admin users');
+    }
+    
+    try {
+      // Create user in authentication system is handled by Admin SDK on backend
+      // For this implementation, we'll create a placeholder user document in Firestore
+      
+      const userDocRef = doc(db, COLLECTIONS.USERS, `placeholder_${Date.now()}`);
+      await setDoc(userDocRef, {
+        email: userData.email,
+        displayName: userData.displayName || userData.email.split('@')[0],
+        role: userData.role || USER_ROLES.ADMIN.toLowerCase(),
+        status: USER_STATUS.ACTIVE,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: currentUser.uid,
+        version: 1,
+        isDeleted: false
+      });
+      
+      return userDocRef.id;
+    } catch (err) {
+      console.error("Create admin user error:", err);
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  /**
    * Check if user has a specific role (case-insensitive)
    * @param {string} role - Role to check
    * @returns {boolean} - Whether user has the role
@@ -368,19 +362,19 @@ export function AuthProvider({ children }) {
     loading,
     error,
     login,
-    register,
     logout,
     resetPassword,
     updateUserEmail,
     updateUserPassword,
     updateUserProfile,
+    createAdminUser,
     hasRole,
     isAdmin
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {!loading ? children : null}
     </AuthContext.Provider>
   );
 }

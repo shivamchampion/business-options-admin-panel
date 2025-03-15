@@ -3,21 +3,14 @@
  * Sets up authentication and routing for the application
  */
 import React from 'react';
+import { BrowserRouter } from 'react-router-dom';
 import AppRouter from './components/AppRouter';
-import LoginPage from './pages/LoginPage';
 import { useAuth } from './contexts/AuthContext';
 import { USER_ROLES } from './config/constants';
 import './App.css';
 
 function App() {
   const { currentUser, userDetails, loading, isAdmin } = useAuth();
-  
-  console.log("App rendering with:", { 
-    currentUser: currentUser?.email, 
-    userDetails, 
-    loading,
-    isAdmin: currentUser && userDetails ? isAdmin() : 'waiting for data'
-  });
   
   // Show loading state
   if (loading || (currentUser && !userDetails)) {
@@ -37,26 +30,12 @@ function App() {
     isAdmin() || (import.meta.env.DEV && currentUser.email === 'admin@businessoptions.in')
   );
   
-  // For easier debugging, log the authorization check
-  if (currentUser && userDetails) {
-    console.log('Authorization check:', {
-      currentUser: currentUser.email,
-      userRole: userDetails.role,
-      adminRole: USER_ROLES.ADMIN,
-      moderatorRole: USER_ROLES.MODERATOR,
-      isAdmin: hasAdminAccess
-    });
-  }
-  
-  // Show login page if not authenticated or not an admin
-  if (!hasAdminAccess) {
-    return <LoginPage />;
-  }
-  
-  // Show admin panel if authenticated and authorized
+  // Show admin panel with router, which includes the login page
   return (
     <div className="app">
-      <AppRouter />
+      <BrowserRouter>
+        <AppRouter isAuthenticated={hasAdminAccess} />
+      </BrowserRouter>
     </div>
   );
 }

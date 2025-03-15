@@ -1,6 +1,7 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import AdminLayout from '../layouts/AdminLayout';
+import LoginPage from '../pages/LoginPage';
 import DashboardPage from '../pages/DashboardPage';
 import UserRolesPage from '../pages/UserRolesPage';
 import AdvisorManagementPage from '../pages/AdvisorManagementPage';
@@ -11,23 +12,34 @@ import AnalyticsPage from '../pages/AnalyticsPage';
 import ContentPage from '../pages/ContentPage';
 import SettingsPage from '../pages/SettingsPage';
 
-const AppRouter = () => {
+const AppRouter = ({ isAuthenticated }) => {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<AdminLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="user-roles" element={<UserRolesPage />} />
-          <Route path="advisors" element={<AdvisorManagementPage />} />
-          <Route path="listings" element={<ListingsPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="applications" element={<ApplicationsPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="content" element={<ContentPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
-    </Router>
+    <Routes>
+      {/* Public route */}
+      <Route path="/login" element={
+        isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
+      } />
+
+      {/* Protected admin routes */}
+      <Route path="/" element={
+        isAuthenticated ? <AdminLayout /> : <Navigate to="/login" replace />
+      }>
+        <Route index element={<DashboardPage />} />
+        <Route path="user-roles" element={<UserRolesPage />} />
+        <Route path="advisors" element={<AdvisorManagementPage />} />
+        <Route path="listings" element={<ListingsPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="applications" element={<ApplicationsPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="content" element={<ContentPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+      </Route>
+
+      {/* Catch all - redirect to login or dashboard based on authentication */}
+      <Route path="*" element={
+        isAuthenticated ? <Navigate to="/" replace /> : <Navigate to="/login" replace />
+      } />
+    </Routes>
   );
 };
 

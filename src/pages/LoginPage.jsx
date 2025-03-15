@@ -1,5 +1,6 @@
 // LoginPage.jsx
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -14,7 +15,8 @@ const LoginPage = () => {
   const [resetMode, setResetMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   
-  const { login, resetPassword, logout } = useAuth();
+  const navigate = useNavigate();
+  const { login, resetPassword } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -40,7 +42,6 @@ const LoginPage = () => {
       }
       
       const userData = userDoc.data();
-      console.log('Full user data from database:', userData);
       
       // For debugging/development - temporarily fix the user role if needed
       // IMPORTANT: Remove this section in production!
@@ -50,8 +51,9 @@ const LoginPage = () => {
           role: 'admin'
         });
         console.log('Admin role has been set');
-        // Reload the page to pick up the new role
-        window.location.reload();
+        
+        // Navigate to the dashboard directly
+        navigate('/');
         return;
       }
       
@@ -60,19 +62,14 @@ const LoginPage = () => {
       const adminRole = USER_ROLES.ADMIN.toLowerCase();
       const moderatorRole = USER_ROLES.MODERATOR.toLowerCase();
       
-      console.log('Login role check:', {
-        userRole,
-        adminRole,
-        moderatorRole
-      });
-      
       // Check if user has admin role
       if (userRole !== adminRole && userRole !== moderatorRole) {
         // If not admin, we'll allow login if this is a development environment
         // or if this is a known admin email
         if (import.meta.env.DEV || email === 'admin@businessoptions.in') {
           console.warn('Development environment or known admin - bypassing role check');
-          return; // Allow login to proceed
+          navigate('/'); // Redirect to dashboard
+          return;
         }
         
         // Otherwise sign out the user if they're not an admin
@@ -81,6 +78,7 @@ const LoginPage = () => {
       }
       
       // If we get here, the user is an admin and will be redirected to the dashboard
+      navigate('/');
       
     } catch (error) {
       setError(
@@ -109,13 +107,13 @@ const LoginPage = () => {
       setLoading(true);
       await resetPassword(email);
       setResetSent(true);
+      setLoading(false);
     } catch (error) {
       setError(
         error.code === 'auth/user-not-found'
           ? 'No account found with this email'
           : 'Failed to send password reset email. Please try again.'
       );
-    } finally {
       setLoading(false);
     }
   };
